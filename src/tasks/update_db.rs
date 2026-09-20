@@ -30,7 +30,12 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>
     let client = reqwest::Client::new();
 
     loop {
-        let resp = client.get(&url).send().await?.json::<MempoolResponse>().await?;
+        let resp = client
+            .get(&url)
+            .send()
+            .await?
+            .json::<MempoolResponse>()
+            .await?;
         let nodes = ApiResponse::from(resp);
 
         update_nodes(pool, &nodes.0).await.unwrap();

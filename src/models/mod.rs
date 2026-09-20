@@ -13,34 +13,51 @@ pub struct Alias(String);
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Sats(pub u64);
 
+impl sqlx::Type<sqlx::Postgres> for Sats {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <i64 as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+        <i64 as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+    }
+}
+
+impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Sats {
+    fn decode(value: sqlx::postgres::PgValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+        let raw_i64 = <i64 as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        let sats_u64 = u64::try_from(raw_i64)?;
+        Ok(Sats(sats_u64))
+    }
+}
+
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Bitcoin(f64);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MempoolNode {
-    public_key: PubKey,
-    alias: Alias,
-    channels: u32,
+    pub public_key: PubKey,
+    pub alias: Alias,
+    pub channels: u32,
     capacity: Sats,
     #[serde(with = "chrono::serde::ts_seconds")]
-    first_seen: DateTime<Utc>,
+    pub first_seen: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_seconds")]
-    updated_at: DateTime<Utc>,
-    city: Option<HashMap<String, String>>,
-    country: Option<HashMap<String, String>>,
+    pub updated_at: DateTime<Utc>,
+    pub city: Option<HashMap<String, String>>,
+    pub country: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MempoolResponse(pub Vec<MempoolNode>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ApiNode {
     pub public_key: PubKey,
     pub alias: Alias,
     #[serde(serialize_with = "sats_to_bitcoin")]
     pub capacity: Sats,
-    #[serde(serialize_with = "datetime_to_iso")]
     pub first_seen: DateTime<Utc>,
 }
 
@@ -48,11 +65,7 @@ pub struct ApiNode {
 pub struct ApiResponse(pub Vec<ApiNode>);
 
 fn sats_to_bitcoin<S: Serializer>(sats: &Sats, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_f64(Bitcoin::from(*sats).0)
-}
-
-fn datetime_to_iso<S: Serializer>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(&date.to_rfc3339())
+    serializer.serialize_str(&format!("{:.8}", Bitcoin::from(*sats).0))
 }
 
 impl From<Sats> for Bitcoin {

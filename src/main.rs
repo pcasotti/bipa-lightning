@@ -1,6 +1,8 @@
-use axum::{Router, extract::State, routing::get};
+use axum::{Json, Router, extract::State, routing::get};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
+
+use crate::models::{ApiNode, ApiResponse};
 
 mod models;
 mod tasks;
@@ -27,6 +29,11 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_nodes(State(pool): State<PgPool>) {
-    todo!()
+async fn get_nodes(State(pool): State<PgPool>) -> Json<ApiResponse> {
+    let nodes = sqlx::query_as::<_, ApiNode>("SELECT * FROM nodes")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+    Json(ApiResponse(nodes))
 }
