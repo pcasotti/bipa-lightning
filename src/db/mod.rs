@@ -3,6 +3,7 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use crate::{db::error::Error, env};
 
 pub mod error;
+pub mod nodes;
 
 static DATABASE_URL_KEY: &str = "DATABASE_URL";
 
@@ -20,7 +21,10 @@ static DATABASE_URL_KEY: &str = "DATABASE_URL";
 pub async fn init() -> Result<PgPool, Error> {
     let url = env::get(DATABASE_URL_KEY);
 
-    let pool = PgPoolOptions::new().connect(&url).await?;
+    let pool = PgPoolOptions::new()
+        .connect(&url)
+        .await
+        .map_err(Error::Connect)?;
 
     sqlx::migrate!("db/migrations").run(&pool).await?;
 

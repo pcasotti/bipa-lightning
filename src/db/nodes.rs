@@ -1,0 +1,44 @@
+use sqlx::PgPool;
+
+use crate::{db::error::Error, models::ApiNode};
+
+/// Inserts or updates the given nodes in the database.
+///
+/// Existing rows are matched on `public_key` and updated with the latest
+/// alias, capacity and first seen timestamp.
+///
+/// Returns [`Error::Query`] if the query fails.
+pub async fn upsert_nodes(pool: &PgPool, nodes: &[ApiNode]) -> Result<(), Error> {
+    let keys: Vec<_> = nodes.iter().map(|n| n.public_key.clone()).collect();
+    let aliases: Vec<_> = nodes.iter().map(|n| n.alias.clone()).collect();
+    let capacities: Vec<_> = nodes.iter().map(|n| n.capacity.0 as i64).collect();
+    let dates: Vec<_> = nodes.iter().map(|n| n.first_seen).collect();
+
+    sqlx::query(
+        "
+        INSERT INTO nodes (public_key, alias, capacity, first_seen)
+        SELECT * FROM UNNEST($1::text[], $2::text[], $3::bigint[], $4::timestamptz[])
+        ON CONFLICT (public_key) DO UPDATE SET
+            alias = EXCLUDED.alias,
+            capacity = EXCLUDED.capacity,
+            first_seen = EXCLUDED.first_seen
+        ",
+    )
+    .bind(&keys)
+    .bind(&aliases)
+    .bind(&capacities)
+    .bind(&dates)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Fetches all nodes from the database.
+///
+/// Returns [`Error::Query`] if the query fails.
+pub async fn fetch_all(pool: &PgPool) -> Result<Vec<ApiNode>, Error> {
+    Ok(sqlx::query_as::<_, ApiNode>("SELECT * FROM nodes")
+        .fetch_all(pool)
+        .await?)
+}

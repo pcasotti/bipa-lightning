@@ -4,6 +4,6 @@ use thiserror::Error;
 pub enum Error {
     #[error("failed to fetch data from mempool")]
     Api(#[from] reqwest::Error),
-    #[error("failed to update nodes in database")]
-    Database(#[from] sqlx::Error),
+    #[error("database operation failed")]
+    Database(#[from] crate::db::error::Error),
 }
