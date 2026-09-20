@@ -20,8 +20,6 @@
           buildInputs = [
             openssl
             pkg-config
-            eza
-            fd
             rust-bin.stable.latest.default
           ];
         };
