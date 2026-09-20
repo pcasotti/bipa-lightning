@@ -1,25 +1,18 @@
 use axum::{Json, Router, extract::State, routing::get};
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::PgPool;
 use tokio::net::TcpListener;
 
 use crate::models::{ApiNode, ApiResponse};
 
+mod db;
 mod models;
 mod tasks;
 
 #[tokio::main]
 async fn main() {
-    let pool = PgPoolOptions::new()
-        .connect("postgres://postgres:postgres@localhost:5432/nodes")
-        .await
-        .unwrap();
+    let pool = db::init().await;
 
-    sqlx::migrate!("db/migrations").run(&pool).await.unwrap();
-
-    let task_pool = pool.clone();
-    tokio::spawn(async move {
-        tasks::update_db::update_loop(&task_pool).await.unwrap();
-    });
+    tasks::update_db::spawn(&pool).await;
 
     let app = Router::new()
         .route("/nodes", get(get_nodes))

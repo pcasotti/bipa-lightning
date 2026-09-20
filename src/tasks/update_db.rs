@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use sqlx::PgPool;
+use tokio::task::JoinHandle;
 
 use crate::models::{ApiNode, ApiResponse, MempoolResponse};
 
@@ -9,6 +10,13 @@ static DEFAULT_UPDATE_INTERVAL: Duration = Duration::from_secs(30);
 static MEMPOOL_URL_KEY: &str = "MEMPOOL_URL";
 static DEFAULT_MEMPOOL_URL: &str =
     "https://mempool.space/api/v1/lightning/nodes/rankings/connectivity";
+
+pub async fn spawn(pool: &PgPool) -> JoinHandle<()> {
+    let pool = pool.clone();
+    tokio::spawn(async move {
+        update_loop(&pool).await.unwrap();
+    })
+}
 
 pub async fn update_loop(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
     let duration = std::env::var(UPDATE_INTERVAL_KEY)
