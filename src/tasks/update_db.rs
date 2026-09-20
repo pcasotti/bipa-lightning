@@ -3,15 +3,18 @@ use std::time::Duration;
 use sqlx::PgPool;
 use tokio::task::JoinHandle;
 
-use crate::models::{ApiNode, ApiResponse, MempoolResponse};
+use crate::{
+    env,
+    models::{ApiNode, ApiResponse, MempoolResponse},
+};
 
 static UPDATE_INTERVAL_KEY: &str = "UPDATE_INTERVAL_SECS";
-static DEFAULT_UPDATE_INTERVAL: Duration = Duration::from_secs(30);
+static UPDATE_INTERVAL_DEFAULT: Duration = Duration::from_secs(30);
 static MEMPOOL_URL_KEY: &str = "MEMPOOL_URL";
-static DEFAULT_MEMPOOL_URL: &str =
+static MEMPOOL_URL_DEFAULT: &str =
     "https://mempool.space/api/v1/lightning/nodes/rankings/connectivity";
 
-pub async fn spawn(pool: &PgPool) -> JoinHandle<()> {
+pub async fn start(pool: &PgPool) -> JoinHandle<()> {
     let pool = pool.clone();
     tokio::spawn(async move {
         update_loop(&pool).await.unwrap();
@@ -19,32 +22,24 @@ pub async fn spawn(pool: &PgPool) -> JoinHandle<()> {
 }
 
 pub async fn update_loop(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    let duration = std::env::var(UPDATE_INTERVAL_KEY)
-        .inspect_err(|e| eprintln!("{e}: {UPDATE_INTERVAL_KEY}"))
-        .ok()
-        .and_then(|s| {
-            s.parse::<u64>()
-                .inspect_err(|e| eprintln!("{e}: {UPDATE_INTERVAL_KEY}: {s}"))
-                .ok()
-        })
-        .map(Duration::from_secs)
-        .unwrap_or(DEFAULT_UPDATE_INTERVAL);
-
     // TODO: set min interval
-    let url = std::env::var(MEMPOOL_URL_KEY)
-        .inspect_err(|e| eprintln!("{e}: {MEMPOOL_URL_KEY}"))
-        .unwrap_or(DEFAULT_MEMPOOL_URL.to_owned());
+    let duration = Duration::from_secs(env::get_from_str_or(
+        UPDATE_INTERVAL_KEY,
+        UPDATE_INTERVAL_DEFAULT.as_secs(),
+    ));
+
+    let url = env::get_or(MEMPOOL_URL_KEY, MEMPOOL_URL_DEFAULT.to_string());
 
     let client = reqwest::Client::new();
 
     loop {
-        let resp = client
+        let nodes: ApiResponse = client
             .get(&url)
             .send()
             .await?
             .json::<MempoolResponse>()
-            .await?;
-        let nodes = ApiResponse::from(resp);
+            .await?
+            .into();
 
         update_nodes(pool, &nodes.0).await.unwrap();
 

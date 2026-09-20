@@ -5,20 +5,28 @@ use tokio::net::TcpListener;
 use crate::models::{ApiNode, ApiResponse};
 
 mod db;
+mod env;
 mod models;
 mod tasks;
 
+static LISTEN_ADDR_KEY: &str = "LISTEN_ADDR";
+static LISTEN_ADDR_DEFAULT: &str = "127.0.0.1:3000";
+
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     let pool = db::init().await;
 
-    tasks::update_db::spawn(&pool).await;
+    tasks::update_db::start(&pool).await;
 
     let app = Router::new()
         .route("/nodes", get(get_nodes))
         .with_state(pool.clone());
 
-    let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let addr = env::get_or(LISTEN_ADDR_KEY, LISTEN_ADDR_DEFAULT.to_owned());
+
+    let listener = TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
