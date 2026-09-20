@@ -11,6 +11,8 @@ use crate::{
 
 static UPDATE_INTERVAL_KEY: &str = "UPDATE_INTERVAL_SECS";
 static UPDATE_INTERVAL_DEFAULT: Duration = Duration::from_secs(30);
+static UPDATE_INTERVAL_MIN: u64 = 1;
+
 static MEMPOOL_URL_KEY: &str = "MEMPOOL_URL";
 static MEMPOOL_URL_DEFAULT: &str =
     "https://mempool.space/api/v1/lightning/nodes/rankings/connectivity";
@@ -31,18 +33,24 @@ pub fn start(pool: &PgPool) -> JoinHandle<()> {
 
 /// Runs the periodic update loop until it fails.
 ///
-/// Reads the update interval and mempool URL from environment variables,
-/// then continuously fetches the latest node rankings from mempool and
-/// upserts them into the database.
+/// Reads the update interval and mempool URL from environment variables
+/// (`UPDATE_INTERVAL_SECS` and `MEMPOOL_URL`), then continuously fetches the
+/// latest node rankings from mempool and upserts them into the database. The
+/// interval is clamped to a minimum of [`UPDATE_INTERVAL_MIN`] seconds.
 ///
 /// Returns [`Error::Api`] if the mempool request fails.
 /// Returns [`Error::Database`] if the nodes could not be written to the database.
 pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
-    // TODO: set min interval
-    let duration = Duration::from_secs(env::get_from_str_or(
-        UPDATE_INTERVAL_KEY,
-        UPDATE_INTERVAL_DEFAULT.as_secs(),
-    ));
+    let mut interval = env::get_from_str_or(UPDATE_INTERVAL_KEY, UPDATE_INTERVAL_DEFAULT.as_secs());
+    if interval < UPDATE_INTERVAL_MIN {
+        tracing::warn!(
+            "{UPDATE_INTERVAL_KEY} value {interval} below minimum \
+             {UPDATE_INTERVAL_MIN}, using minimum"
+        );
+        interval = UPDATE_INTERVAL_MIN;
+    }
+
+    let duration = Duration::from_secs(interval);
 
     let url = env::get_or(MEMPOOL_URL_KEY, MEMPOOL_URL_DEFAULT.to_string());
 
@@ -57,7 +65,7 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
             .await?
             .into();
 
-        update_nodes(pool, &nodes.0).await?;
+        upsert_nodes(pool, &nodes.0).await?;
 
         tokio::time::sleep(duration).await;
     }
@@ -69,7 +77,7 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
 /// alias, capacity and first seen timestamp.
 ///
 /// Returns [`Error::Database`] if the query fails.
-pub async fn update_nodes(pool: &PgPool, nodes: &[ApiNode]) -> Result<(), Error> {
+pub async fn upsert_nodes(pool: &PgPool, nodes: &[ApiNode]) -> Result<(), Error> {
     let keys: Vec<_> = nodes.iter().map(|n| n.public_key.clone()).collect();
     let aliases: Vec<_> = nodes.iter().map(|n| n.alias.clone()).collect();
     let capacities: Vec<_> = nodes.iter().map(|n| n.capacity.0 as i64).collect();
