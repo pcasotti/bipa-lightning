@@ -16,9 +16,11 @@ static LISTEN_ADDR_DEFAULT: &str = "127.0.0.1:3000";
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let pool = db::init().await;
+    let pool = db::init()
+        .await
+        .expect("application should be able to connect to the database");
 
-    tasks::update_db::start(&pool).await;
+    tasks::update_db::start(&pool);
 
     let app = Router::new()
         .route("/nodes", get(get_nodes))
