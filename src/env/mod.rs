@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{ffi::OsStr, fmt::Debug, str::FromStr};
 
 /// Reads environment variables with a unified logging behaviour.
