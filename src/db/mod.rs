@@ -26,7 +26,11 @@ pub async fn init() -> Result<PgPool, Error> {
         .await
         .map_err(Error::Connect)?;
 
+    tracing::info!("connected to postgres database");
+
     sqlx::migrate!("db/migrations").run(&pool).await?;
+
+    tracing::info!("database migrations applied");
 
     Ok(pool)
 }

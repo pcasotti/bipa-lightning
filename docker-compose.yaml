@@ -24,6 +24,7 @@ services:
       LISTEN_ADDR: 0.0.0.0:3000
       UPDATE_INTERVAL_SECS: 30
       MEMPOOL_URL: https://mempool.space/api/v1/lightning/nodes/rankings/connectivity
+      RUST_LOG: trace
     ports:
       - "3000:3000"
     depends_on:

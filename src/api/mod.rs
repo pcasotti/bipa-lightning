@@ -11,5 +11,7 @@ pub mod error;
 pub async fn get_nodes(State(pool): State<PgPool>) -> Result<Json<NodesResponse>, error::Error> {
     let nodes = db::nodes::fetch_all(&pool).await?;
 
+    tracing::debug!(count = nodes.len(), "GET /nodes handled");
+
     Ok(Json(NodesResponse(nodes)))
 }

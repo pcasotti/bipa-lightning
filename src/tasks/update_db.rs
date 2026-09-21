@@ -56,6 +56,8 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
 
     let client = reqwest::Client::new();
 
+    tracing::info!(interval_secs = duration.as_secs(), "starting update loop");
+
     loop {
         let nodes: NodesResponse = client
             .get(&url)
@@ -66,6 +68,8 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
             .into();
 
         db::nodes::upsert_nodes(pool, &nodes.0).await?;
+
+        tracing::debug!(count = nodes.0.len(), "mempool nodes fetched and upserted");
 
         tokio::time::sleep(duration).await;
     }

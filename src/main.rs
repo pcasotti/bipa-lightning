@@ -13,6 +13,7 @@ static LISTEN_ADDR_DEFAULT: &str = "127.0.0.1:3000";
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    tracing::info!("starting bipa-lightning");
 
     let pool = db::init()
         .await
@@ -30,6 +31,7 @@ async fn main() {
         .await
         .expect("application should be able to bind to the listener address");
 
+    tracing::info!(%addr, "HTTP server listening");
     axum::serve(listener, app)
         .await
         .expect("`axum::serve` should not return");
