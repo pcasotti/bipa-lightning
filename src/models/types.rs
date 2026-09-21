@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize, Serializer};
 
 /// A lightning node public key.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
-pub struct PubKey(String);
+pub struct PubKey(pub String);
 
 /// A lightning node alias.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
-pub struct Alias(String);
+pub struct Alias(pub String);
 
 /// An amount in satoshis.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sats(pub u64);
 
 /// An amount in bitcoin.
@@ -44,5 +44,20 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for Sats {
         let raw_i64 = <i64 as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
         let sats_u64 = u64::try_from(raw_i64)?;
         Ok(Sats(sats_u64))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_bitcoin_is_one_hundred_million_sats() {
+        assert_eq!(Bitcoin::from(Sats(100_000_000)).0, 1.0);
+    }
+
+    #[test]
+    fn one_sat_is_one_hundred_nanobitcoin() {
+        assert_eq!(Bitcoin::from(Sats(1)).0, 1e-8);
     }
 }
