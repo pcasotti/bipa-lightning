@@ -32,7 +32,7 @@ async fn main() {
         .expect("application should be able to bind to the listener address");
 
     tracing::info!(%addr, "HTTP server listening");
-    axum::serve(listener, app)
-        .await
-        .expect("`axum::serve` should not return");
+    let _ = axum::serve(listener, app).await;
+
+    panic!("`axum::serve` should not return");
 }

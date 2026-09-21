@@ -19,28 +19,23 @@ static MEMPOOL_URL_DEFAULT: &str =
 
 /// Starts the periodic node update loop on a background task.
 ///
-/// Returns a [`JoinHandle`] that can be used to await or abort the loop.
-///
-/// If the loop exits with an error, it is logged and the task ends.
+/// Returns a [`JoinHandle`] for the task.
 pub fn start(pool: &PgPool) -> JoinHandle<()> {
     let pool = pool.clone();
     tokio::spawn(async move {
-        if let Err(e) = update_loop(&pool).await {
-            tracing::error!("update loop failed: {e}");
-        }
+        update_loop(&pool).await;
     })
 }
 
-/// Runs the periodic update loop until it fails.
+/// Runs the periodic update loop.
 ///
 /// Reads the update interval and mempool URL from environment variables
 /// (`UPDATE_INTERVAL_SECS` and `MEMPOOL_URL`), then continuously fetches the
 /// latest node rankings from mempool and upserts them into the database. The
 /// interval is clamped to a minimum of [`UPDATE_INTERVAL_MIN`] seconds.
 ///
-/// Returns [`Error::Api`] if the mempool request fails.
-/// Returns [`Error::Database`] if the nodes could not be written to the database.
-pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
+/// If the loop fails it will retry in the same update interval.
+pub async fn update_loop(pool: &PgPool) -> ! {
     let mut interval = env::get_from_str_or(UPDATE_INTERVAL_KEY, UPDATE_INTERVAL_DEFAULT.as_secs());
     if interval < UPDATE_INTERVAL_MIN {
         tracing::warn!(
@@ -51,6 +46,7 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
     }
 
     let duration = Duration::from_secs(interval);
+    let mut interval = tokio::time::interval(duration);
 
     let url = env::get_or(MEMPOOL_URL_KEY, MEMPOOL_URL_DEFAULT.to_string());
 
@@ -59,18 +55,26 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
     tracing::info!(interval_secs = duration.as_secs(), "starting update loop");
 
     loop {
-        let nodes: NodesResponse = client
-            .get(&url)
-            .send()
-            .await?
-            .json::<MempoolResponse>()
-            .await?
-            .into();
+        interval.tick().await;
 
-        db::nodes::upsert_nodes(pool, &nodes.0).await?;
-
-        tracing::debug!(count = nodes.0.len(), "mempool nodes fetched and upserted");
-
-        tokio::time::sleep(duration).await;
+        if let Err(e) = fetch_and_upsert(pool, &client, &url).await {
+            tracing::error!("update loop iteration failed, will retry: {e}");
+        }
     }
+}
+
+async fn fetch_and_upsert(pool: &PgPool, client: &reqwest::Client, url: &str) -> Result<(), Error> {
+    let nodes: NodesResponse = client
+        .get(url)
+        .send()
+        .await?
+        .json::<MempoolResponse>()
+        .await?
+        .into();
+
+    db::nodes::upsert_nodes(pool, &nodes.0).await?;
+
+    tracing::debug!(count = nodes.0.len(), "mempool nodes fetched and upserted");
+
+    Ok(())
 }
