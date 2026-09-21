@@ -5,7 +5,7 @@ use tokio::task::JoinHandle;
 
 use crate::{
     db, env,
-    models::{ApiResponse, MempoolResponse},
+    models::{MempoolResponse, NodesResponse},
     tasks::error::Error,
 };
 
@@ -57,7 +57,7 @@ pub async fn update_loop(pool: &PgPool) -> Result<(), Error> {
     let client = reqwest::Client::new();
 
     loop {
-        let nodes: ApiResponse = client
+        let nodes: NodesResponse = client
             .get(&url)
             .send()
             .await?

@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use crate::{db::error::Error, models::ApiNode};
+use crate::{db::error::Error, models::Node};
 
 /// Inserts or updates the given nodes in the database.
 ///
@@ -8,7 +8,7 @@ use crate::{db::error::Error, models::ApiNode};
 /// alias, capacity and first seen timestamp.
 ///
 /// Returns [`Error::Query`] if the query fails.
-pub async fn upsert_nodes(pool: &PgPool, nodes: &[ApiNode]) -> Result<(), Error> {
+pub async fn upsert_nodes(pool: &PgPool, nodes: &[Node]) -> Result<(), Error> {
     let keys: Vec<_> = nodes.iter().map(|n| n.public_key.clone()).collect();
     let aliases: Vec<_> = nodes.iter().map(|n| n.alias.clone()).collect();
     let capacities: Vec<_> = nodes.iter().map(|n| n.capacity.0 as i64).collect();
@@ -37,8 +37,8 @@ pub async fn upsert_nodes(pool: &PgPool, nodes: &[ApiNode]) -> Result<(), Error>
 /// Fetches all nodes from the database.
 ///
 /// Returns [`Error::Query`] if the query fails.
-pub async fn fetch_all(pool: &PgPool) -> Result<Vec<ApiNode>, Error> {
-    Ok(sqlx::query_as::<_, ApiNode>("SELECT * FROM nodes")
+pub async fn fetch_all(pool: &PgPool) -> Result<Vec<Node>, Error> {
+    Ok(sqlx::query_as::<_, Node>("SELECT * FROM nodes")
         .fetch_all(pool)
         .await?)
 }
